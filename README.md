@@ -91,3 +91,7 @@ Só deve ser tentada depois das Partes 1–3 estarem concluídas.
 O skeleton em [`src/`](src/) fornece `load_data.py`, `data.py`, `train.py`, `metrics.py`, `requirements.txt` e instruções de utilização. É permitido modificar estes ficheiros, mas todas as alterações devem ser descritas no relatório.
 
 O enunciado original em PDF está em [`project.pdf`](project.pdf).
+
+### Template do relatório
+
+O template LaTeX oficial foi obtido a partir da página da cadeira e está em [`report/template/`](report/template/). O ficheiro principal é [`main.tex`](report/template/main.tex); deve ser mantido o tamanho de letra, margens e espaçamento definidos pela cadeira.
