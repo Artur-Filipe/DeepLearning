@@ -139,20 +139,24 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
-    history = runs[0]["history"]
-    epochs = range(1, len(history["train_loss"]) + 1)
-    figure, loss_axis = plt.subplots(figsize=(8, 4.5))
-    loss_axis.plot(epochs, history["train_loss"], label="Training loss", color="#2563eb")
+    figure, (loss_axis, accuracy_axis) = plt.subplots(1, 2, figsize=(11, 4.5))
+    for run in runs:
+        history = run["history"]
+        epochs = range(1, len(history["train_loss"]) + 1)
+        loss_axis.plot(epochs, history["train_loss"], label=f"Seed {run['seed']}")
+        accuracy_axis.plot(epochs, [100 * score for score in history["val_score"]],
+                           label=f"Seed {run['seed']}")
     loss_axis.set_xlabel("Epoch")
-    loss_axis.set_ylabel("Cross-entropy loss")
+    loss_axis.set_ylabel("Training cross-entropy")
+    loss_axis.set_title("Training loss")
     loss_axis.grid(alpha=0.25)
-    accuracy_axis = loss_axis.twinx()
-    accuracy_axis.plot(epochs, history["val_score"], label="Validation accuracy", color="#dc2626")
-    accuracy_axis.set_ylabel("Validation accuracy")
-    accuracy_axis.set_ylim(0, 1)
-    loss_axis.set_title("Q2.1 — Linear classification baseline")
-    handles = loss_axis.lines + accuracy_axis.lines
-    loss_axis.legend(handles, [line.get_label() for line in handles], loc="center right")
+    accuracy_axis.set_xlabel("Epoch")
+    accuracy_axis.set_ylabel("Validation accuracy (%)")
+    accuracy_axis.set_title("Validation accuracy")
+    accuracy_axis.set_ylim(0, 100)
+    accuracy_axis.grid(alpha=0.25)
+    accuracy_axis.legend(title="Run")
+    figure.suptitle("Q2.1 — Linear classification baseline")
     figure.tight_layout()
     figure.savefig(output_dir / "learning_curves.png", dpi=160)
     plt.close(figure)
