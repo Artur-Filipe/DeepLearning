@@ -9,6 +9,7 @@ The dataset cache is written under ``src/data/`` and the reproducible results ar
 """
 
 import json
+import argparse
 import sys
 from pathlib import Path
 
@@ -34,7 +35,7 @@ from train import get_device, set_seed, train
 SEEDS = (0, 1, 2)
 BATCH_SIZE = 128
 EPOCHS = 25
-LEARNING_RATE = 0.1
+DEFAULT_LEARNING_RATE = 0.001
 
 
 class LinearClassifier(nn.Module):
@@ -58,13 +59,13 @@ def predictions(model, loader, device):
     return torch.cat(all_predictions), torch.cat(all_labels)
 
 
-def run_one_seed(data, mean, std, seed, device):
+def run_one_seed(data, mean, std, seed, device, learning_rate):
     set_seed(seed)
     train_loader, validation_loader, test_loader = image_loaders(
         data, batch_size=BATCH_SIZE, mean=mean, std=std
     )
     model = LinearClassifier()
-    optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
     def loss_fn(current_model, batch):
         images, labels = batch
@@ -88,12 +89,21 @@ def run_one_seed(data, mean, std, seed, device):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Run the Q2.1 linear baseline.")
+    parser.add_argument("--learning-rate", type=float, default=DEFAULT_LEARNING_RATE)
+    parser.add_argument("--output-suffix", default="", help="Optional result folder suffix.")
+    args = parser.parse_args()
+    if args.learning_rate <= 0:
+        parser.error("--learning-rate must be positive")
+
     data = load_coco_dominant10()
     mean, std = channel_stats(data["train"]["images"])
     device = get_device()
     runs = []
     for seed in SEEDS:
-        history, test_accuracy, model = run_one_seed(data, mean, std, seed, device)
+        history, test_accuracy, model = run_one_seed(
+            data, mean, std, seed, device, args.learning_rate
+        )
         runs.append({
             "seed": seed,
             "best_epoch": history["best_epoch"],
@@ -124,7 +134,7 @@ def main():
             "batch_size": BATCH_SIZE,
             "epochs": EPOCHS,
             "optimizer": "SGD",
-            "learning_rate": LEARNING_RATE,
+            "learning_rate": args.learning_rate,
             "model": "linear classifier / multinomial logistic regression",
             "trainable_parameters": sum(p.numel() for p in model.parameters() if p.requires_grad),
         },
@@ -135,24 +145,29 @@ def main():
         "runs": runs,
     }
 
-    output_dir = ROOT / "results" / "q2_1"
+    result_name = "q2_1" + (f"_{args.output_suffix}" if args.output_suffix else "")
+    output_dir = ROOT / "results" / result_name
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
-    history = runs[0]["history"]
-    epochs = range(1, len(history["train_loss"]) + 1)
-    figure, loss_axis = plt.subplots(figsize=(8, 4.5))
-    loss_axis.plot(epochs, history["train_loss"], label="Training loss", color="#2563eb")
+    figure, (loss_axis, accuracy_axis) = plt.subplots(1, 2, figsize=(11, 4.5))
+    for run in runs:
+        history = run["history"]
+        epochs = range(1, len(history["train_loss"]) + 1)
+        loss_axis.plot(epochs, history["train_loss"], label=f"Seed {run['seed']}")
+        accuracy_axis.plot(epochs, [100 * score for score in history["val_score"]],
+                           label=f"Seed {run['seed']}")
     loss_axis.set_xlabel("Epoch")
-    loss_axis.set_ylabel("Cross-entropy loss")
+    loss_axis.set_ylabel("Training cross-entropy")
+    loss_axis.set_title("Training loss")
     loss_axis.grid(alpha=0.25)
-    accuracy_axis = loss_axis.twinx()
-    accuracy_axis.plot(epochs, history["val_score"], label="Validation accuracy", color="#dc2626")
-    accuracy_axis.set_ylabel("Validation accuracy")
-    accuracy_axis.set_ylim(0, 1)
-    loss_axis.set_title("Q2.1 — Linear classification baseline")
-    handles = loss_axis.lines + accuracy_axis.lines
-    loss_axis.legend(handles, [line.get_label() for line in handles], loc="center right")
+    accuracy_axis.set_xlabel("Epoch")
+    accuracy_axis.set_ylabel("Validation accuracy (%)")
+    accuracy_axis.set_title("Validation accuracy")
+    accuracy_axis.set_ylim(0, 100)
+    accuracy_axis.grid(alpha=0.25)
+    accuracy_axis.legend(title="Run")
+    figure.suptitle("Q2.1 — Linear classification baseline")
     figure.tight_layout()
     figure.savefig(output_dir / "learning_curves.png", dpi=160)
     plt.close(figure)
